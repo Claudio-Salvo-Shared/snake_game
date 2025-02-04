@@ -12,20 +12,17 @@ SCREEN_WIDTH = CELL_SIZE * GRID_WIDTH
 SCREEN_HEIGHT = CELL_SIZE * GRID_HEIGHT
 
 # Colors (RGB)
-BLACK   = (0, 0, 0)         # Background
-GREEN   = (0, 255, 0)       # Snake color
-RED     = (255, 0, 0)       # Fruit color
-WHITE   = (255, 255, 255)   # Text color
-TRAP_COLOR = (255, 165, 0)  # Orange – trap color
-
-# Trap settings
-TRAP_CUT_LENGTH = 3       # How many segments to cut off when a trap is hit.
+BLACK      = (0, 0, 0)         # Background
+GREEN      = (0, 255, 0)       # Snake color
+RED        = (255, 0, 0)       # Fruit color
+WHITE      = (255, 255, 255)   # Text color
+TRAP_COLOR = (255, 165, 0)     # Orange – trap color
 
 # ---------------------------
 # Helper Functions
 # ---------------------------
 def spawn_fruit(snake, traps):
-    """Return a random position (tuple) that is not occupied by the snake or a trap."""
+    """Return a random position (tuple) that is not occupied by the snake or any trap."""
     while True:
         pos = (random.randint(0, GRID_WIDTH - 1), random.randint(0, GRID_HEIGHT - 1))
         if pos not in snake and pos not in traps:
@@ -40,19 +37,14 @@ def spawn_trap(traps, snake, fruit):
 
 def find_path(snake, fruit, traps):
     """
-    Use BFS to try to find a sequence of moves that leads the snake from its current state
-    to the fruit while avoiding traps.
+    Use Breadth-First Search (BFS) to find a sequence of moves that leads the snake from its current state
+    to the fruit while avoiding traps and self-collision.
     
     The BFS state is a tuple: (snake_state, path) where:
       - snake_state is a tuple of positions (with head at index 0)
-      - path is a list of moves (each move is a tuple, e.g. (1,0) for right)
+      - path is a list of moves (each move is a tuple, e.g., (1,0) for right)
       
-    Movement simulation:
-      - Without eating fruit: new snake state = (new_head,) + snake_state[:-1]
-      - When fruit is reached: the snake grows (tail is not removed).
-      
-    We “free” the tail cell when moving normally (since it will be removed) and skip any move
-    that would land on a trap.
+    For a normal move (when not eating fruit) the tail is freed so that cell is not considered blocked.
     """
     directions = [(0, -1), (0, 1), (-1, 0), (1, 0)]  # Up, Down, Left, Right
     initial_state = (tuple(snake), [])
@@ -65,15 +57,15 @@ def find_path(snake, fruit, traps):
         
         for d in directions:
             new_head = (head[0] + d[0], head[1] + d[1])
-            # Check boundaries.
+            # Check board boundaries.
             if not (0 <= new_head[0] < GRID_WIDTH and 0 <= new_head[1] < GRID_HEIGHT):
                 continue
 
-            # Skip if new_head is on a trap.
+            # Avoid trap cells.
             if new_head in traps:
                 continue
 
-            # For a normal move the tail will move (freeing up that cell).
+            # For a normal move the tail will move, so remove the tail cell from occupied.
             occupied = set(snake_state)
             if len(snake_state) > 1:
                 occupied.remove(snake_state[-1])
@@ -82,28 +74,28 @@ def find_path(snake, fruit, traps):
                 continue
 
             if new_head == fruit:
-                # Eat the fruit: snake grows (tail is not removed)
+                # Reaching the fruit: snake grows (tail not removed).
                 new_snake = (new_head,) + snake_state
-                new_path = path + [d]
-                return new_path
+                return path + [d]
             else:
                 # Normal move: add new head and remove tail.
                 new_snake = (new_head,) + snake_state[:-1]
             
             if new_snake in visited:
                 continue
+            
             visited.add(new_snake)
             queue.append((new_snake, path + [d]))
     
-    # No path found.
+    # No valid path found.
     return None
 
 def get_next_direction(snake, fruit, current_direction, traps):
     """
     Decide the next move for the snake.
-    First, try to find a complete path to the fruit (avoiding traps).
-    If one is found, return its first move.
-    Otherwise, choose any safe move that avoids immediate collisions with walls, itself, or traps.
+    First try to find a complete path to the fruit (avoiding traps).
+    If found, return the first move of that path.
+    Otherwise, pick any safe move (avoiding walls, self, and traps).
     """
     path = find_path(snake, fruit, traps)
     if path is not None and len(path) > 0:
@@ -130,26 +122,26 @@ def get_next_direction(snake, fruit, current_direction, traps):
 def main():
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Snake AI with Traps")
+    pygame.display.set_caption("Snake AI with 2 Traps per Second")
     clock = pygame.time.Clock()
     
-    # Set a timer event for trap spawning every 2000 ms.
+    # Set a timer event to spawn traps every 1000 ms.
     TRAP_EVENT = pygame.USEREVENT + 1
-    pygame.time.set_timer(TRAP_EVENT, 2000)
+    pygame.time.set_timer(TRAP_EVENT, 1000)
     
-    # Initialize font for displaying score.
+    # Initialize font for displaying the score.
     font = pygame.font.SysFont(None, 36)
     
-    # Initialize the snake: list of positions (head at index 0).
-    snake = [(GRID_WIDTH // 2, GRID_HEIGHT // 2),
-             (GRID_WIDTH // 2 - 1, GRID_HEIGHT // 2),
-             (GRID_WIDTH // 2 - 2, GRID_HEIGHT // 2)]
-    current_direction = (1, 0)  # Start moving to the right.
+    # Initialize the snake: head is at index 0.
+    snake = [
+        (GRID_WIDTH // 2, GRID_HEIGHT // 2),
+        (GRID_WIDTH // 2 - 1, GRID_HEIGHT // 2),
+        (GRID_WIDTH // 2 - 2, GRID_HEIGHT // 2)
+    ]
+    current_direction = (1, 0)  # Starting to move to the right.
     
-    # Initialize fruit and traps.
     traps = []
     fruit = spawn_fruit(snake, traps)
-    
     score = 0
     running = True
 
@@ -159,26 +151,26 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == TRAP_EVENT:
-                # Spawn a new trap every 2 seconds.
-                trap_pos = spawn_trap(traps, snake, fruit)
-                traps.append(trap_pos)
+                # Spawn 2 traps every second.
+                for _ in range(2):
+                    trap_pos = spawn_trap(traps, snake, fruit)
+                    traps.append(trap_pos)
         
         # --- AI Decides the Next Move ---
         next_direction = get_next_direction(snake, fruit, current_direction, traps)
         current_direction = next_direction
-        
-        # Compute the new head position.
+
+        # Compute new head position.
         head = snake[0]
         new_head = (head[0] + current_direction[0], head[1] + current_direction[1])
         
-        # Check for wall collisions.
+        # Check for collision with walls.
         if not (0 <= new_head[0] < GRID_WIDTH and 0 <= new_head[1] < GRID_HEIGHT):
             print("Game Over! Hit a wall. Final score:", score)
             running = False
             continue
         
         # Check for self–collision.
-        # (Note: when not eating a fruit, the snake’s tail moves, so the last cell is safe.)
         if new_head in snake[:-1]:
             print("Game Over! Ran into itself. Final score:", score)
             running = False
@@ -186,24 +178,26 @@ def main():
         
         # Move the snake.
         if new_head == fruit:
-            # Eat the fruit: grow the snake and increase score.
+            # Eat the fruit: snake grows and score increases.
             snake = [new_head] + snake
             score += 1
             fruit = spawn_fruit(snake, traps)
         else:
-            # Normal move: add new head and remove tail.
+            # Normal move: add new head and remove the tail.
             snake = [new_head] + snake[:-1]
         
         # --- Trap Collision Check ---
-        # If the snake’s head lands on a trap, cut TRAP_CUT_LENGTH segments off its tail.
         if snake[0] in traps:
-            if len(snake) <= TRAP_CUT_LENGTH:
-                print("Game Over! Hit a trap and lost too much of the snake. Final score:", score)
+            # When hitting a trap, cut the snake in half.
+            # We use rounding up so that, for example, a 3–segment snake becomes 2 segments.
+            new_length = (len(snake) + 1) // 2
+            if new_length < 2:
+                print("Game Over! Hit a trap and lost half its length. Final score:", score)
                 running = False
                 continue
             else:
-                snake = snake[:-TRAP_CUT_LENGTH]
-                print("Hit a trap! Snake cut by", TRAP_CUT_LENGTH, "segments. New length:", len(snake))
+                snake = snake[:new_length]
+                print("Hit a trap! Snake is cut to half its length. New length:", len(snake))
         
         # --- Drawing ---
         screen.fill(BLACK)
@@ -222,12 +216,12 @@ def main():
             segment_rect = pygame.Rect(segment[0] * CELL_SIZE, segment[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE)
             pygame.draw.rect(screen, GREEN, segment_rect)
         
-        # Draw the score on the screen.
+        # Draw the score.
         score_text = font.render("Score: " + str(score), True, WHITE)
         screen.blit(score_text, (10, 10))
         
         pygame.display.flip()
-        clock.tick(10)  # Adjust speed (frames per second) as desired.
+        clock.tick(10)  # Adjust frames per second as desired.
     
     pygame.quit()
 
