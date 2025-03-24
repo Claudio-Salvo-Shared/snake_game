@@ -1,0 +1,33 @@
+Snake Game 
+
+-> PRÉ REQUISITOS 
+	- Ambiente configurado e estruturado com as bibliotecas e arquivos do Python. (Deixar os arquivos criados facilitará na hora de colar o código que o GPT gerou)
+	- Prompt completo de um jogo que deu certo 
+
+
+-> FASE 1
+	- Pedir ao GPT para gerar os dois arquivos de código. Um para treinamento do modelo e outro que será o jogo e irá rodar o modelo. 
+
+-> FASE 2 	
+	- Rodar o modelo de treinamento com poucas sessões, mostrando que o "Score" ainda é baixo.
+	- Rodar o jogo com o modelo pouco treinado para mostrar a ineficiência. 
+
+-> FASE 3 
+	- Rodar o modelo de treinamento com mais sessões (um numero suficiente para um resultado ok e que não demore muito também).
+	- Rodar o jogo com o modelo mais treinado e destacar a melhora. 
+
+---------------------------------------------------------------------------------------------------------------------------------
+
+-> PROBLEMAS IDENTIFICADOS 
+	- Mesmo com o prompt gerado pelo GPT através de um "Snake Game perfeito", ele ainda gera coisas muito diferentes e com algoritmos diferentes para treinamento. 
+	- Os modelos de treinamento que ele gera, normalmente são mais demorados e não demonstram resultados tão bons com menos sessões. 
+	- Muitos pontos de ajuste são necessários, gastando muito tempo em conversa com o GPT até chegar em algo mais próximo ao resultado final. 
+
+(O segundo prompt realizado demonstrou resultados melhores, atingindo um nível satisfatório para a apresentação)
+---------------------------------------------------------------------------------------------------------------------------------
+
+-> TEMPOS
+	- O GPT leva uns 5 minutos para gerar os dois códigos 
+	- O primeiro treinamento, com 30 sessões leva uns 10 segundos (Não morreu muito rápido, mas ficou meio perdido atrás da recompensa)
+	- O segundo treinamento, com 100 sessões leva uns 15 segundos (Morreu com 6 pontos, mas mostrou mais "vontade" atrás da recompensa)
+	- Treinamento com 500 sessões levou aproximadamente 1 minuto, e deu para ver bastante diferença de pontuação entre as primeiras e as ultimas sessões. (Em alguns casos morreu rápido mas muito mais objetivo atras das recompensas, e em outros casos fez pontuações altas quando comparadas aos modelos com menos treinamento.) 

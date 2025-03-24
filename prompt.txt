@@ -1,0 +1,49 @@
+Crie um projeto em Python que implemente um jogo da cobrinha autônomo com as seguintes características:
+ 
+1. **Lógica do Jogo (usando Pygame):**
+
+   - A cobrinha é autônoma, ou seja, não há controle manual; ela deve buscar automaticamente as recompensas.
+
+   - O objetivo da cobrinha é pegar o máximo de recompensas possível, aumentando sua pontuação e tamanho.
+
+   - A cada 2 segundos, novos itens são gerados e adicionados aos já existentes:
+
+     - Uma recompensa (bloquinho azul), que ao ser coletada aumenta o tamanho da cobrinha e a pontuação.
+
+     - Dois obstáculos (bloquinhos vermelhos). Caso a cobrinha colida com um obstáculo, ela perde 50% do seu tamanho (mantendo pelo menos 1 bloco), além de diminuir sua pontuação. Se a cobra tiver apenas 1 bloco e colidir com um obstáculo, o jogo termina e reinicia.
+
+   - A cobrinha também não pode colidir com as bordas nem consigo mesma; qualquer colisão com esses elementos termina o jogo e reinicia a partida.
+
+   - A tela do jogo deve ser atualizada com os itens (cobrinha, recompensas e obstáculos) e exibir a pontuação atual.
+ 
+2. **Treinamento com Machine Learning (Deep Q‑Learning):**
+
+   - Crie um arquivo separado (por exemplo, `train_model.py`) que contenha a implementação de um agente usando Deep Q‑Learning para treinar a inteligência da cobrinha.
+
+   - Utilize uma rede neural simples (DQN) com duas camadas lineares.
+
+   - O ambiente do treinamento deve ser uma versão “headless” (sem renderização) do jogo com as mesmas regras do jogo autônomo.
+
+   - O estado do ambiente deve ser representado por um vetor de 11 dimensões contendo informações como: perigo (em frente, à direita e à esquerda), direção atual (one-hot) e posição relativa da recompensa mais próxima.
+
+   - Implemente experience replay para treinar o agente e registre, para cada episódio, o score (número de recompensas coletadas) e a recompensa total acumulada.
+
+   - Ao final do treinamento, salve o modelo treinado (por exemplo, em `model.pth`) e os resultados do treinamento (em um arquivo de texto).
+ 
+3. **Integração do Modelo Treinado no Jogo:**
+
+   - Crie outro arquivo (por exemplo, `snake_game_with_model.py`) que contenha o jogo da cobrinha atualizado para carregar e usar o modelo treinado.
+
+   - Nesse arquivo, ao invés de usar a lógica simples para escolher a direção, o jogo deverá extrair o estado atual e usar o modelo para predizer a ação (movimentos relativos: seguir em frente, virar à direita ou virar à esquerda).
+
+   - Mantenha as mesmas regras do jogo, incluindo a geração periódica de recompensas e obstáculos, e a regra de perder 50% do tamanho da cobrinha ao colidir com um obstáculo.
+ 
+4. **Requisitos Adicionais:**
+
+   - Quando a cobrinha colidir com um obstáculo, ela deve perder 50% do seu tamanho atual (garantindo que tenha sempre pelo menos 1 bloco).
+
+   - O código deve ser completo e funcional, dividido em dois arquivos: `train_model.py` (para treinamento) e `snake_game_with_model.py` (para o jogo com o modelo carregado).
+ 
+Forneça o código completo para os dois arquivos (treinamento e jogo) com todas as correções e implementações necessárias para que o jogo funcione conforme descrito.
+
+ 

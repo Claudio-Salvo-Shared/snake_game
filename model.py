@@ -1,277 +1,297 @@
-import numpy as np
 import random
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 from collections import deque
 
-# --------------------------
-# Definição do ambiente Snake
-# --------------------------
+# Hiperparâmetros
+MAX_MEMORY = 100000
+BATCH_SIZE = 1000
+LR = 0.001
+GAMMA = 0.9
+EPSILON_START = 1.0
+EPSILON_MIN = 0.01
+EPSILON_DECAY = 0.995
 
+# Parâmetros do ambiente
 GRID_WIDTH = 30
 GRID_HEIGHT = 20
+ADD_ITEM_EVERY = 20  # A cada 20 passos (aprox. 2 seg se FPS=10), adiciona recompensa e obstáculos
 
-class SnakeEnv:
+# Definindo as direções (Up, Right, Down, Left)
+DIRECTIONS = [(0, -1), (1, 0), (0, 1), (-1, 0)]
+
+
+class SnakeGameAI:
     def __init__(self):
-        self.grid_width = GRID_WIDTH
-        self.grid_height = GRID_HEIGHT
         self.reset()
-
-    def reset(self):
-        # Define os obstáculos antes de chamar _place_food()
-        self.obstacles = []  # Inicia sem obstáculos; serão adicionados com o tempo
-        # Inicia a cobra com 3 blocos no centro (orientada para a direita)
-        self.snake = [
-            (self.grid_width // 2, self.grid_height // 2),
-            (self.grid_width // 2 - 1, self.grid_height // 2),
-            (self.grid_width // 2 - 2, self.grid_height // 2)
-        ]
-        self.direction = (1, 0)  # direção inicial: para a direita
-        self.food = self._place_food()
-        self.steps = 0
-        self.obstacle_interval = 50  # a cada 50 passos, um novo obstáculo é adicionado
-        self.done = False
-        return self._get_state()
-
-    def _place_food(self):
-        while True:
-            pos = (random.randint(0, self.grid_width - 1),
-                   random.randint(0, self.grid_height - 1))
-            if pos not in self.snake and pos not in self.obstacles:
-                return pos
-
-
-    def _add_obstacle(self):
-        attempts = 0
-        while attempts < 100:
-            pos = (random.randint(0, self.grid_width - 1),
-                   random.randint(0, self.grid_height - 1))
-            if pos not in self.snake and pos not in self.obstacles and pos != self.food:
-                self.obstacles.append(pos)
-                break
-            attempts += 1
-
-    def step(self, action):
-        """
-        Ações: 0 = cima, 1 = baixo, 2 = esquerda, 3 = direita.
-        Atualiza o estado, aplica recompensas e verifica condições de término.
-        """
-        # Atualiza a direção com base na ação (impede reversão imediata)
-        if action == 0 and self.direction != (0, 1):
-            self.direction = (0, -1)
-        elif action == 1 and self.direction != (0, -1):
-            self.direction = (0, 1)
-        elif action == 2 and self.direction != (1, 0):
-            self.direction = (-1, 0)
-        elif action == 3 and self.direction != (-1, 0):
-            self.direction = (1, 0)
-
-        head = self.snake[0]
-        new_head = (head[0] + self.direction[0], head[1] + self.direction[1])
-        self.steps += 1
-        reward = -0.1  # penalidade pequena a cada passo
-
-        # Adiciona obstáculo periodicamente
-        if self.steps % self.obstacle_interval == 0:
-            self._add_obstacle()
-
-        # Verifica colisão com parede
-        if not (0 <= new_head[0] < self.grid_width and 0 <= new_head[1] < self.grid_height):
-            self.done = True
-            reward = -10
-            return self._get_state(), reward, self.done, {}
-
-        # Colisão com o próprio corpo
-        if new_head in self.snake:
-            self.done = True
-            reward = -10
-            return self._get_state(), reward, self.done, {}
-
-        # Move a cobra
-        self.snake.insert(0, new_head)
-        # Se comer a comida, aumenta e gera nova comida; caso contrário, remove a cauda
-        if new_head == self.food:
-            reward = 10
-            self.food = self._place_food()
-        else:
-            self.snake.pop()
-
-        # Se colidir com obstáculo, aplica penalidade (reduz tamanho)
-        if new_head in self.obstacles:
-            if len(self.snake) > 1:
-                self.snake.pop()  # remoção extra de um bloco
-                reward = -5
-            else:
-                self.done = True
-                reward = -10
-
-        return self._get_state(), reward, self.done, {}
-
-    def _get_state(self):
-        """
-        Representa o estado como um tensor 3xHxW:
-         - Canal 0: posição da cobra (1 onde está a cobra)
-         - Canal 1: posição da comida
-         - Canal 2: posição dos obstáculos
-        """
-        state = np.zeros((3, self.grid_height, self.grid_width), dtype=np.float32)
-        for (x, y) in self.snake:
-            state[0, y, x] = 1.0
-        fx, fy = self.food
-        state[1, fy, fx] = 1.0
-        for (x, y) in self.obstacles:
-            state[2, y, x] = 1.0
-        return state
-
-    def render(self):
-        # Renderização simples no terminal (opcional)
-        grid = [[' ' for _ in range(self.grid_width)] for _ in range(self.grid_height)]
-        for (x, y) in self.obstacles:
-            grid[y][x] = 'X'
-        for (x, y) in self.snake:
-            grid[y][x] = 'O'
-        fx, fy = self.food
-        grid[fy][fx] = '*'
-        print('\n'.join([''.join(row) for row in grid]))
-        print('-' * self.grid_width)
-
-# --------------------------
-# Definição da rede DQN (Deep Q-Network)
-# --------------------------
-
-class DQN(nn.Module):
-    def __init__(self, input_shape, n_actions):
-        super(DQN, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(input_shape[0], 32, kernel_size=3, stride=1),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1),
-            nn.ReLU()
-        )
-        conv_out_size = self._get_conv_out(input_shape)
-        self.fc = nn.Sequential(
-            nn.Linear(conv_out_size, 128),
-            nn.ReLU(),
-            nn.Linear(128, n_actions)
-        )
-
-    def _get_conv_out(self, shape):
-        o = self.conv(torch.zeros(1, *shape))
-        return int(np.prod(o.size()))
-
-    def forward(self, x):
-        conv_out = self.conv(x)
-        conv_out = conv_out.view(x.size()[0], -1)
-        return self.fc(conv_out)
-
-# --------------------------
-# Replay Buffer para amostragem de experiências
-# --------------------------
-
-class ReplayBuffer:
-    def __init__(self, capacity):
-        self.buffer = deque(maxlen=capacity)
     
-    def push(self, state, action, reward, next_state, done):
-        self.buffer.append((state, action, reward, next_state, done))
+    def reset(self):
+        self.snake = [(GRID_WIDTH // 2, GRID_HEIGHT // 2)]
+        self.direction = (0, -1)  # inicia subindo
+        self.score = 0
+        self.rewards_list = []
+        self.obstacles = []
+        self.frame_iteration = 0
+        return self.get_state()
+    
+    def add_items(self):
+        occupied = set(self.snake) | set(self.rewards_list) | set(self.obstacles)
+        # Adiciona uma recompensa
+        pos = self.random_position(occupied)
+        self.rewards_list.append(pos)
+        # Adiciona dois obstáculos
+        for _ in range(2):
+            occupied = set(self.snake) | set(self.rewards_list) | set(self.obstacles)
+            pos = self.random_position(occupied)
+            self.obstacles.append(pos)
+    
+    def random_position(self, occupied):
+        while True:
+            pos = (random.randint(0, GRID_WIDTH - 1), random.randint(0, GRID_HEIGHT - 1))
+            if pos not in occupied:
+                return pos
+    
+    def is_collision(self, point=None):
+        if point is None:
+            point = self.snake[0]
+        # Colisão com borda
+        if point[0] < 0 or point[0] >= GRID_WIDTH or point[1] < 0 or point[1] >= GRID_HEIGHT:
+            return True
+        # Colisão com si mesmo
+        if point in self.snake[1:]:
+            return True
+        return False
+
+    def move(self, action):
+        """
+        Ação: 0 - seguir em frente, 1 - virar à direita, 2 - virar à esquerda.
+        A direção é atualizada de forma relativa.
+        """
+        idx = DIRECTIONS.index(self.direction)
+        if action == 1:  # virar à direita
+            new_idx = (idx + 1) % 4
+        elif action == 2:  # virar à esquerda
+            new_idx = (idx - 1) % 4
+        else:
+            new_idx = idx
+        self.direction = DIRECTIONS[new_idx]
+        new_head = (self.snake[0][0] + self.direction[0], self.snake[0][1] + self.direction[1])
+        self.snake.insert(0, new_head)
+    
+    def update(self, action):
+        self.frame_iteration += 1
+        # A cada ADD_ITEM_EVERY passos, adiciona uma recompensa e dois obstáculos
+        if self.frame_iteration % ADD_ITEM_EVERY == 0:
+            self.add_items()
+        
+        self.move(action)
+        reward = 0
+        game_over = False
+        head = self.snake[0]
+        
+        # Checa colisão com parede ou com o próprio corpo
+        if self.is_collision(head):
+            game_over = True
+            reward = -10
+            return reward, game_over, self.score
+        
+        # Verifica se a cabeça está numa recompensa
+        if head in self.rewards_list:
+            self.rewards_list.remove(head)
+            self.score += 1
+            reward = 10
+            # Cresce: não remove a cauda nesta jogada
+        else:
+            # Movimento normal: remove a cauda
+            self.snake.pop()
+        
+        # Verifica colisão com obstáculos e remove 50% do tamanho
+        if head in self.obstacles:
+            self.obstacles.remove(head)
+            if len(self.snake) > 1:
+                # Calcula 50% do tamanho atual (garante pelo menos 1 bloco)
+                new_length = max(1, len(self.snake) // 2)
+                self.snake = self.snake[:new_length]
+            else:
+                game_over = True
+                reward = -10
+        
+        return reward, game_over, self.score
+
+    def get_state(self):
+        head = self.snake[0]
+
+        # Função auxiliar para verificar "perigo" em uma dada direção
+        def danger_in_direction(direction):
+            next_point = (head[0] + direction[0], head[1] + direction[1])
+            if next_point[0] < 0 or next_point[0] >= GRID_WIDTH or next_point[1] < 0 or next_point[1] >= GRID_HEIGHT:
+                return 1
+            if next_point in self.snake[1:]:
+                return 1
+            if next_point in self.obstacles:
+                return 1
+            return 0
+        
+        # Calcula os perigos para frente, à direita e à esquerda, de acordo com a direção atual
+        idx = DIRECTIONS.index(self.direction)
+        straight = self.direction
+        right = DIRECTIONS[(idx + 1) % 4]
+        left = DIRECTIONS[(idx - 1) % 4]
+        
+        danger_straight = danger_in_direction(straight)
+        danger_right = danger_in_direction(right)
+        danger_left = danger_in_direction(left)
+        
+        # Codificação one-hot da direção atual (up, right, down, left)
+        dir_up = 1 if self.direction == (0, -1) else 0
+        dir_right = 1 if self.direction == (1, 0) else 0
+        dir_down = 1 if self.direction == (0, 1) else 0
+        dir_left = 1 if self.direction == (-1, 0) else 0
+        
+        # Posição relativa da recompensa (se houver)
+        food_left = food_right = food_up = food_down = 0
+        if self.rewards_list:
+            closest = min(self.rewards_list, key=lambda p: abs(p[0] - head[0]) + abs(p[1] - head[1]))
+            if closest[0] < head[0]:
+                food_left = 1
+            elif closest[0] > head[0]:
+                food_right = 1
+            if closest[1] < head[1]:
+                food_up = 1
+            elif closest[1] > head[1]:
+                food_down = 1
+        
+        state = [
+            danger_straight, danger_right, danger_left,
+            dir_up, dir_right, dir_down, dir_left,
+            food_left, food_right, food_up, food_down
+        ]
+        return np.array(state, dtype=int)
+
+
+# Modelo de Rede Neural (DQN simples)
+class Linear_QNet(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(Linear_QNet, self).__init__()
+        self.linear1 = nn.Linear(input_size, hidden_size)
+        self.linear2 = nn.Linear(hidden_size, output_size)
+    
+    def forward(self, x):
+        x = torch.relu(self.linear1(x))
+        x = self.linear2(x)
+        return x
+
+
+# Memória para Experience Replay
+class ReplayMemory:
+    def __init__(self, capacity):
+        self.memory = deque(maxlen=capacity)
+    
+    def push(self, transition):
+        self.memory.append(transition)
     
     def sample(self, batch_size):
-        batch = random.sample(self.buffer, batch_size)
-        state, action, reward, next_state, done = map(np.array, zip(*batch))
-        return state, action, reward, next_state, done
+        return random.sample(self.memory, batch_size)
     
     def __len__(self):
-        return len(self.buffer)
+        return len(self.memory)
+    
+    # Permite iterar sobre os itens da memória
+    def __iter__(self):
+        return iter(self.memory)
 
-# --------------------------
-# Hiperparâmetros e inicialização do treinamento
-# --------------------------
 
-EPISODES = 30          # Número de episódios de treinamento
-BATCH_SIZE = 64
-GAMMA = 0.99
-LEARNING_RATE = 1e-3
-REPLAY_BUFFER_CAPACITY = 10000
-EPS_START = 1.0
-EPS_END = 0.05
-EPS_DECAY = 300         # Taxa de decaimento do epsilon para a política ε-greedy
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-env = SnakeEnv()
-n_actions = 4
-state_shape = env._get_state().shape
-
-policy_net = DQN(state_shape, n_actions).to(device)
-target_net = DQN(state_shape, n_actions).to(device)
-target_net.load_state_dict(policy_net.state_dict())
-target_net.eval()
-
-optimizer = optim.Adam(policy_net.parameters(), lr=LEARNING_RATE)
-replay_buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
-
-def select_action(state, steps_done):
-    # Estratégia ε-greedy: com probabilidade eps escolhe ação aleatória, senão escolhe a melhor ação segundo o modelo
-    eps_threshold = EPS_END + (EPS_START - EPS_END) * np.exp(-1. * steps_done / EPS_DECAY)
-    if random.random() < eps_threshold:
-        return random.randrange(n_actions)
-    else:
-        with torch.no_grad():
-            state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
-            q_values = policy_net(state_tensor)
-            return q_values.max(1)[1].item()
-
-def compute_loss(batch):
-    states, actions, rewards, next_states, dones = batch
-    states = torch.tensor(states, dtype=torch.float32).to(device)
-    actions = torch.tensor(actions, dtype=torch.int64).unsqueeze(1).to(device)
-    rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
-    next_states = torch.tensor(next_states, dtype=torch.float32).to(device)
-    dones = torch.tensor(dones, dtype=torch.float32).to(device)
-
-    q_values = policy_net(states).gather(1, actions).squeeze(1)
-    next_q_values = target_net(next_states).max(1)[0]
-    expected_q_values = rewards + GAMMA * next_q_values * (1 - dones)
-    loss = F.mse_loss(q_values, expected_q_values.detach())
-    return loss
-
-steps_done = 0
-update_target_every = 1000
-
-# --------------------------
-# Loop de treinamento
-# --------------------------
-
-for episode in range(EPISODES):
-    state = env.reset()
-    total_reward = 0
-    while True:
-        action = select_action(state, steps_done)
-        next_state, reward, done, _ = env.step(action)
-        total_reward += reward
-        replay_buffer.push(state, action, reward, next_state, done)
-        state = next_state
-        steps_done += 1
-
-        if len(replay_buffer) >= BATCH_SIZE:
-            batch = replay_buffer.sample(BATCH_SIZE)
-            loss = compute_loss(batch)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+class Agent:
+    def __init__(self):
+        self.n_games = 0
+        self.epsilon = EPSILON_START  # taxa de exploração
+        self.gamma = GAMMA
+        self.memory = ReplayMemory(MAX_MEMORY)
+        self.model = Linear_QNet(11, 128, 3)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=LR)
+        self.criterion = nn.MSELoss()
+    
+    def get_action(self, state):
+        state0 = torch.tensor(state, dtype=torch.float)
+        # Estratégia epsilon-greedy
+        if random.random() < self.epsilon:
+            move = random.randint(0, 2)
+        else:
+            with torch.no_grad():
+                prediction = self.model(state0)
+                move = torch.argmax(prediction).item()
+        return move
+    
+    def train_short_memory(self, state, action, reward, next_state, done):
+        state = torch.tensor(state, dtype=torch.float).unsqueeze(0)
+        next_state = torch.tensor(next_state, dtype=torch.float).unsqueeze(0)
+        reward = torch.tensor([reward], dtype=torch.float)
+        action = torch.tensor([action], dtype=torch.long)
+        done = torch.tensor([done], dtype=torch.bool)
         
-        if steps_done % update_target_every == 0:
-            target_net.load_state_dict(policy_net.state_dict())
+        pred = self.model(state)
+        pred = pred.gather(1, action.unsqueeze(1)).squeeze(1)
+        target = reward + self.gamma * torch.max(self.model(next_state), dim=1)[0] * (not done)
+        loss = self.criterion(pred, target)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+    
+    def train_long_memory(self):
+        if len(self.memory) < BATCH_SIZE:
+            mini_sample = list(self.memory)
+        else:
+            mini_sample = self.memory.sample(BATCH_SIZE)
         
-        if done:
-            break
-    print(f"Episode {episode+1}, Recompensa Total: {total_reward}")
+        states, actions, rewards, next_states, dones = zip(*mini_sample)
+        states = torch.tensor(np.array(states), dtype=torch.float)
+        actions = torch.tensor(actions, dtype=torch.long)
+        rewards = torch.tensor(rewards, dtype=torch.float)
+        next_states = torch.tensor(np.array(next_states), dtype=torch.float)
+        dones = torch.tensor(dones, dtype=torch.bool)
+        
+        pred = self.model(states)
+        pred = pred.gather(1, actions.unsqueeze(1)).squeeze(1)
+        target = rewards + self.gamma * torch.max(self.model(next_states), dim=1)[0] * (~dones)
+        loss = self.criterion(pred, target)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
-# --------------------------
-# Salvando o modelo treinado
-# --------------------------
 
-torch.save(policy_net.state_dict(), "snake_dqn.pth")
-print("Modelo salvo em 'snake_dqn.pth'")
+def train():
+    agent = Agent()
+    game = SnakeGameAI()
+    episodes = 500
+    scores = []
+    total_rewards = []
+    
+    for e in range(episodes):
+        state = game.reset()
+        done = False
+        episode_reward = 0
+        while not done:
+            action = agent.get_action(state)
+            reward, done, score = game.update(action)
+            episode_reward += reward
+            next_state = game.get_state()
+            agent.train_short_memory(state, action, reward, next_state, done)
+            agent.memory.push((state, action, reward, next_state, done))
+            state = next_state
+        agent.train_long_memory()
+        scores.append(score)
+        total_rewards.append(episode_reward)
+        agent.epsilon = max(EPSILON_MIN, agent.epsilon * EPSILON_DECAY)
+        print(f"Episode {e+1}: Score: {score}, Total Reward: {episode_reward}")
+    
+    # Salva o modelo treinado
+    torch.save(agent.model.state_dict(), "model.pth")
+    # Salva os resultados do treinamento
+    with open("training_results.txt", "w") as f:
+        for e, (s, r) in enumerate(zip(scores, total_rewards), start=1):
+            f.write(f"Episode {e}: Score: {s}, Total Reward: {r}\n")
+
+if __name__ == '__main__':
+    train()
