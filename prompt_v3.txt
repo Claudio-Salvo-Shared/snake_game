@@ -1,0 +1,61 @@
+Crie um projeto em Python que implemente um jogo da cobrinha autônomo utilizando Deep Q‑Learning, dividido em dois arquivos, conforme as especificações abaixo:
+
+1. Arquivo train_model.py – Treinamento do Agente com Deep Q‑Learning (sem renderização):
+
+Ambiente:
+
+Implemente um ambiente headless do jogo da cobrinha (sem interface gráfica) que siga estas regras:
+
+A cobrinha cresce ao comer uma recompensa (bloco azul).
+
+A cada 2 segundos (aproximadamente a cada 20 passos), gere um novo item de recompensa (1 bloco azul) e dois obstáculos (blocos vermelhos).
+
+Se a cobrinha colidir com um obstáculo e tiver mais de 1 segmento, ela perde 50% do seu comprimento (mantendo pelo menos 1 segmento) e a pontuação diminui; se tiver apenas 1 segmento, o jogo termina.
+
+Colisões com as bordas ou consigo mesma encerram o jogo.
+
+Estado:
+
+O estado do ambiente deve ser representado por um vetor de 11 dimensões contendo:
+
+3 indicadores de perigo imediato (frente, direita, esquerda).
+
+4 valores one-hot indicando a direção atual (cima, direita, baixo, esquerda).
+
+4 indicadores referentes à posição relativa da recompensa mais próxima (se a comida está à esquerda, direita, acima ou abaixo da cabeça).
+
+Agente DQN:
+
+Utilize uma rede neural simples com duas camadas lineares (por exemplo, entrada de 11 nós, camada oculta com número adequado de neurônios, e saída com 3 nós representando as ações: seguir em frente, virar à direita, virar à esquerda).
+
+Implemente a política epsilon‑greedy com decaimento (exploração no início e, gradualmente, mais exploração do modelo).
+
+Utilize um replay buffer (experience replay) para armazenar as transições (estado, ação, recompensa, próximo estado, done) e treinar o modelo em minibatches.
+
+Treinamento:
+
+Durante cada episódio, exiba no terminal a pontuação e a recompensa total acumulada.
+
+Salve os resultados dos episódios em um log (por exemplo, training_log.txt).
+
+Ao final do treinamento, salve o modelo treinado em um arquivo model.pth.
+
+2. Arquivo snake_game_with_model.py – Jogo Visual com Pygame Usando o Modelo Treinado:
+
+Interface Visual:
+
+Crie um jogo visual utilizando Pygame que reproduza as mesmas regras do ambiente de treinamento (mesma lógica de movimentação, colisões, geração periódica de recompensas e obstáculos).
+
+Exiba a cobrinha, as recompensas (blocos azuis), os obstáculos (blocos vermelhos) e a pontuação atual na tela.
+
+Integração com o Modelo:
+
+Carregue o modelo treinado (model.pth) e, a cada frame, extraia o estado atual (vetor de 11 dimensões) e use o modelo para predizer a ação (movimentos relativos: manter direção, virar à direita ou virar à esquerda).
+
+A cobrinha deve se movimentar automaticamente com base na decisão do modelo.
+
+Reinício Automático:
+
+Se o jogo terminar (por colisão com parede, com o próprio corpo ou por colisão com obstáculo quando a cobrinha tem apenas 1 segmento), reinicie a partida automaticamente.
+
+Utilize apenas bibliotecas padrão, PyTorch e Pygame. O código deve estar completo e funcional, sem necessidade de ajustes manuais.

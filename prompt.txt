@@ -8,9 +8,9 @@ Crie um projeto em Python que implemente um jogo da cobrinha autônomo com as se
 
    - A cada 2 segundos, novos itens são gerados e adicionados aos já existentes:
 
-     - Uma recompensa (bloquinho azul), que ao ser coletada aumenta o tamanho da cobrinha e a pontuação.
+    - Uma recompensa (bloquinho azul), que ao ser coletada aumenta o tamanho da cobrinha e a pontuação.
 
-     - Dois obstáculos (bloquinhos vermelhos). Caso a cobrinha colida com um obstáculo, ela perde 50% do seu tamanho (mantendo pelo menos 1 bloco), além de diminuir sua pontuação. Se a cobra tiver apenas 1 bloco e colidir com um obstáculo, o jogo termina e reinicia.
+    - Dois obstáculos (bloquinhos vermelhos). Caso a cobrinha colida com um obstáculo, ela perde 50% do seu tamanho (mantendo pelo menos 1 bloco), além de diminuir sua pontuação. Se a cobra tiver apenas 1 bloco e colidir com um obstáculo, o jogo termina e reinicia.
 
    - A cobrinha também não pode colidir com as bordas nem consigo mesma; qualquer colisão com esses elementos termina o jogo e reinicia a partida.
 
